@@ -1,11 +1,14 @@
 'use strict'
+require('dotenv').config();
 
-// url: /i/{encoded src url}/{WxH}/{name.format}
-// url: /l/{path to file}/{WxH}/{name.format}
+// url: /i/{encoded src url}/{WxH}/{name?.format}
+// url: /l/{path to file}/{WxH}/{name?.format}
 // url: /i/{WxH}/{name?.format}?src={src file url}
+// url: /s/{WxH}/{name?.format}?src={s3 path}
 
 const sharp   = require('sharp'),
       resizer = require('./resizer'),
+      s3src   = require('./s3-src'),
       Hapi    = require('hapi'),
       fs      = require('fs'),
       mime    = require('mime'),
@@ -18,6 +21,7 @@ server.connection({
     port: process.env.PORT || 8000
 });
 
+// read from url
 server.route({
     method: 'GET',
     path:'/i/{src}/{size}/{name}',
@@ -28,6 +32,7 @@ server.route({
     }
 });
 
+// read from url
 server.route({
     method: 'GET',
     path:'/i/{size}/{name}',
@@ -43,6 +48,23 @@ server.route({
     }
 });
 
+// read from s3
+server.route({
+    method: 'GET',
+    path:'/s/{size}/{name}',
+    handler: function (req, reply) {
+      if (!req.query.src) { 
+        console.log(req.query);
+        return reply({ "message": "Source image required" }).code(500);
+      } else {
+        return reply(s3src(req.query.src)
+                .pipe(resizer(req.params.size, req.params.name)))
+                .header('Content-Type', mime.lookup(req.params.name));       
+      }
+    }
+});
+
+// read from local
 server.route({
     method: 'GET',
     path:'/l/{path}/{size}/{name}',
@@ -53,6 +75,7 @@ server.route({
     }
 });
 
+// start
 server.start((err) => {
     if (err) { throw err;}
     console.log('Server running at:', server.info.uri);
